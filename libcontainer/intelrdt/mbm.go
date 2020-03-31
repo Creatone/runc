@@ -12,12 +12,8 @@ import (
 var (
 	// The flag to indicate if Intel RDT/MBM is enabled
 	isMbmEnabled bool
-	// The flag to indicate if Intel RDT/MBM "mbm_total_bytes" is enabled
-	isMbmTotalEnabled bool
-	// The flag to indicate if Intel RDT/MBM "mbm_local_bytes" is enabled
-	isMbmLocalEnabled bool
-	// The flag to indicate if Intel RDT/MBM "llc_occupancy" is enabled
-	isMbmLLCOccupancyEnabled bool
+
+	enabledMonFeatures monFeatures
 )
 
 type monFeatures struct {
@@ -29,21 +25,6 @@ type monFeatures struct {
 // Check if Intel RDT/MBM is enabled
 func IsMbmEnabled() bool {
 	return isMbmEnabled
-}
-
-// Check if Intel RDT/MBM "mbm_total_bytes" is enabled
-func IsMbmTotalEnabled() bool {
-	return isMbmTotalEnabled
-}
-
-// Check if Intel RDT/MBM "mbm_local_bytes" is enabled
-func IsMbmLocalEnabled() bool {
-	return isMbmLocalEnabled
-}
-
-// Check if Intel RDT/MBM "llc_occupancy" is enabled
-func IsMbmLlcOccupancyEnabled() bool {
-	return isMbmLLCOccupancyEnabled
 }
 
 func getMonFeatures(intelRdtRoot string) (monFeatures, error) {
@@ -78,22 +59,9 @@ func parseMonFeatures(file io.Reader) (monFeatures, error) {
 	return monFeatures, nil
 }
 
-func getMbmContainerPath(containerPath string) (string, error) {
-	path := filepath.Join(containerPath, "mon_data", "mon_L3_00")
-
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() == false {
-		return "", err
-	}
-
-	return path, nil
-}
-
-func getMbmNumaPaths(containerPath string) ([]string, error) {
-	return filepath.Glob(filepath.Join(containerPath, "mon_data"))
-}
-
 func getMbmStats(containerPath string) (*[]MbmNumaNodeStats, error) {
 	mbmStats := []MbmNumaNodeStats{}
+
 	numaPaths, err := filepath.Glob(filepath.Join(containerPath, "mon_data", "*"))
 
 	if err != nil {
@@ -113,26 +81,26 @@ func getMbmStats(containerPath string) (*[]MbmNumaNodeStats, error) {
 
 func getMbmNumaNodeStats(numaPath string) (*MbmNumaNodeStats, error) {
 	stats := &MbmNumaNodeStats{}
-	if IsMbmTotalEnabled() {
+	if enabledMonFeatures.mbmTotalBytes {
 		mbmTotalBytes, err := getIntelRdtParamUint(numaPath, "mbm_total_bytes")
 		if err != nil {
-			return stats, err
+			return nil, err
 		}
 		stats.MbmTotalBytes = mbmTotalBytes
 	}
 
-	if IsMbmLocalEnabled() {
+	if enabledMonFeatures.mbmLocalBytes {
 		mbmLocalBytes, err := getIntelRdtParamUint(numaPath, "mbm_local_bytes")
 		if err != nil {
-			return stats, err
+			return nil, err
 		}
 		stats.MbmLocalBytes = mbmLocalBytes
 	}
 
-	if IsMbmLlcOccupancyEnabled() {
+	if enabledMonFeatures.llcOccupancy {
 		llcOccupancy, err := getIntelRdtParamUint(numaPath, "llc_occupancy")
 		if err != nil {
-			return stats, err
+			return nil, err
 		}
 		stats.LlcOccupancy = llcOccupancy
 	}

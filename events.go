@@ -218,15 +218,15 @@ func convertMemBwInfo(i *intelrdt.MemBwInfo) *types.MemBwInfo {
 }
 
 func convertMbmNumaNodeStats(i *[]intelrdt.MbmNumaNodeStats) *[]types.MbmNumaNodeStats {
-	mbmNumaNodeStats := make([]types.MbmNumaNodeStats, 0)
+	mbmNumaNodeStats := make([]types.MbmNumaNodeStats, len(*i))
 
-	for _, stats := range *i {
+	for place, stats := range *i {
 		mbmNumaStats := types.MbmNumaNodeStats{
 			MbmTotalBytes: stats.MbmTotalBytes,
 			MbmLocalBytes: stats.MbmLocalBytes,
 			LlcOccupancy:  stats.LlcOccupancy,
 		}
-		mbmNumaNodeStats = append(mbmNumaNodeStats, mbmNumaStats)
+		mbmNumaNodeStats[place] = mbmNumaStats
 	}
 
 	return &mbmNumaNodeStats

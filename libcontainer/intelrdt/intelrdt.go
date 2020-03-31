@@ -232,24 +232,20 @@ func init() {
 			isMbmEnabled = true
 		}
 
-		monFeatures, err := getMonFeatures(intelRdtRoot)
+		enabledMonFeatures, err = getMonFeatures(intelRdtRoot)
 		if err != nil {
 			return
 		}
-
-		isMbmTotalEnabled = monFeatures.mbmTotalBytes
-		isMbmLocalEnabled = monFeatures.mbmLocalBytes
-		isMbmLLCOccupancyEnabled = monFeatures.llcOccupancy
 	}
 }
 
 // Return the mount point path of Intel RDT "resource control" filesysem
 func findIntelRdtMountpointDir() (string, error) {
 	f, err := os.Open("/proc/self/mountinfo")
+
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
 
 	s := bufio.NewScanner(f)
 	for s.Scan() {
@@ -592,11 +588,6 @@ func (m *IntelRdtManager) GetPath() string {
 	return m.Path
 }
 
-// Returns Intel RDT Id
-func (m *IntelRdtManager) GetId() string {
-	return m.Id
-}
-
 // Returns statistics for Intel RDT
 func (m *IntelRdtManager) GetStats() (*Stats, error) {
 	// If intelRdt is not specified in config
@@ -674,13 +665,10 @@ func (m *IntelRdtManager) GetStats() (*Stats, error) {
 	}
 
 	if IsMbmEnabled() {
-
 		mbmStats, err := getMbmStats(containerPath)
-
 		if err != nil {
 			return stats, err
 		}
-
 		stats.MbmStats = mbmStats
 	}
 
