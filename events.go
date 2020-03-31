@@ -161,6 +161,9 @@ func convertLibcontainerStats(ls *libcontainer.Stats) *types.Stats {
 			s.IntelRdt.MemBwSchemaRoot = is.MemBwSchemaRoot
 			s.IntelRdt.MemBwSchema = is.MemBwSchema
 		}
+		if intelrdt.IsMbmEnabled() {
+			s.IntelRdt.MbmStats = convertMbmNumaNodeStats(is.MbmStats)
+		}
 	}
 
 	s.NetworkInterfaces = ls.Interfaces
@@ -212,4 +215,19 @@ func convertMemBwInfo(i *intelrdt.MemBwInfo) *types.MemBwInfo {
 		MinBandwidth:  i.MinBandwidth,
 		NumClosids:    i.NumClosids,
 	}
+}
+
+func convertMbmNumaNodeStats(i *[]intelrdt.MbmNumaNodeStats) *[]types.MbmNumaNodeStats {
+	mbmNumaNodeStats := make([]types.MbmNumaNodeStats, 0)
+
+	for _, stats := range *i {
+		mbmNumaStats := types.MbmNumaNodeStats{
+			MbmTotalBytes: stats.MbmTotalBytes,
+			MbmLocalBytes: stats.MbmLocalBytes,
+			LlcOccupancy:  stats.LlcOccupancy,
+		}
+		mbmNumaNodeStats = append(mbmNumaNodeStats, mbmNumaStats)
+	}
+
+	return &mbmNumaNodeStats
 }

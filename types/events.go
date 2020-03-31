@@ -95,6 +95,17 @@ type MemBwInfo struct {
 	NumClosids    uint64 `json:"num_closids,omitempty"`
 }
 
+type MbmNumaNodeStats struct {
+	// The 'mbm_total_bytes' in 'container_id' group
+	MbmTotalBytes uint64 `json:"mbm_total_bytes,omitempty"`
+
+	// The 'mbm_local_bytes' in 'container_id' group
+	MbmLocalBytes uint64 `json:"mbm_local_bytes,omitempty"`
+
+	// The 'llc occupancy' in 'container_id' group
+	LlcOccupancy uint64 `json:"llc_occupancy,omitempty"`
+}
+
 type IntelRdt struct {
 	// The read-only L3 cache information
 	L3CacheInfo *L3CacheInfo `json:"l3_cache_info,omitempty"`
@@ -113,6 +124,9 @@ type IntelRdt struct {
 
 	// The memory bandwidth schema in 'container_id' group
 	MemBwSchema string `json:"mem_bw_schema,omitempty"`
+
+	// The memory bandwidth monitoring statistics from NUMA nodes in 'container_id' group
+	MbmStats *[]MbmNumaNodeStats `json:"mbm_statistics,omitempty"`
 }
 
 type NetworkInterface struct {
