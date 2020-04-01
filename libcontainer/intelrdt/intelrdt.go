@@ -246,6 +246,7 @@ func findIntelRdtMountpointDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 
 	s := bufio.NewScanner(f)
 	for s.Scan() {
