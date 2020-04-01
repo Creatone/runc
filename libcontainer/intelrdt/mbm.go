@@ -4,6 +4,8 @@ package intelrdt
 
 import (
 	"bufio"
+	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,23 +31,21 @@ func IsMbmEnabled() bool {
 
 func getMonFeatures(intelRdtRoot string) (monFeatures, error) {
 	file, err := os.Open(filepath.Join(intelRdtRoot, "info", "L3_MON", "mon_features"))
+	defer file.Close()
 	if err != nil {
 		return monFeatures{}, err
 	}
 	return parseMonFeatures(file)
 }
 
-func parseMonFeatures(file io.Reader) (monFeatures, error) {
-	s := bufio.NewScanner(file)
+func parseMonFeatures(reader io.Reader) (monFeatures, error) {
+	scanner := bufio.NewScanner(reader)
 
 	monFeatures := monFeatures{}
 
-	for s.Scan() {
-		if err := s.Err(); err != nil {
-			return monFeatures, err
-		}
+	for scanner.Scan() {
 
-		switch feature := s.Text(); feature {
+		switch feature := scanner.Text(); feature {
 
 		case "mbm_total_bytes":
 			monFeatures.mbmTotalBytes = true
@@ -53,14 +53,20 @@ func parseMonFeatures(file io.Reader) (monFeatures, error) {
 			monFeatures.mbmLocalBytes = true
 		case "llc_occupancy":
 			monFeatures.llcOccupancy = true
+		default:
+			logrus.Warn(fmt.Sprintf("Unsupported RDT Memory Bandwidth Monitoring (MBM) feature: %v", feature))
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return monFeatures, err
 	}
 
 	return monFeatures, nil
 }
 
-func getMbmStats(containerPath string) (*[]MbmNumaNodeStats, error) {
-	mbmStats := []MbmNumaNodeStats{}
+func getMBMStats(containerPath string) (*[]MBMNumaNodeStats, error) {
+	mbmStats := []MBMNumaNodeStats{}
 
 	numaPaths, err := filepath.Glob(filepath.Join(containerPath, "mon_data", "*"))
 
@@ -69,7 +75,7 @@ func getMbmStats(containerPath string) (*[]MbmNumaNodeStats, error) {
 	}
 
 	for _, numaPath := range numaPaths {
-		numaStats, err := getMbmNumaNodeStats(numaPath)
+		numaStats, err := getMBMNumaNodeStats(numaPath)
 		if err != nil {
 			return &mbmStats, nil
 		}
@@ -79,14 +85,14 @@ func getMbmStats(containerPath string) (*[]MbmNumaNodeStats, error) {
 	return &mbmStats, nil
 }
 
-func getMbmNumaNodeStats(numaPath string) (*MbmNumaNodeStats, error) {
-	stats := &MbmNumaNodeStats{}
+func getMBMNumaNodeStats(numaPath string) (*MBMNumaNodeStats, error) {
+	stats := &MBMNumaNodeStats{}
 	if enabledMonFeatures.mbmTotalBytes {
 		mbmTotalBytes, err := getIntelRdtParamUint(numaPath, "mbm_total_bytes")
 		if err != nil {
 			return nil, err
 		}
-		stats.MbmTotalBytes = mbmTotalBytes
+		stats.MBMTotalBytes = mbmTotalBytes
 	}
 
 	if enabledMonFeatures.mbmLocalBytes {
@@ -94,7 +100,7 @@ func getMbmNumaNodeStats(numaPath string) (*MbmNumaNodeStats, error) {
 		if err != nil {
 			return nil, err
 		}
-		stats.MbmLocalBytes = mbmLocalBytes
+		stats.MBMLocalBytes = mbmLocalBytes
 	}
 
 	if enabledMonFeatures.llcOccupancy {
@@ -102,7 +108,7 @@ func getMbmNumaNodeStats(numaPath string) (*MbmNumaNodeStats, error) {
 		if err != nil {
 			return nil, err
 		}
-		stats.LlcOccupancy = llcOccupancy
+		stats.LLCOccupancy = llcOccupancy
 	}
 	return stats, nil
 }

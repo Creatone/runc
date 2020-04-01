@@ -195,7 +195,6 @@ type intelRdtData struct {
 // Check if Intel RDT sub-features are enabled in init()
 func init() {
 	// 1. Check if hardware and kernel support Intel RDT sub-features
-	// "cat_l3" flag for CAT and "mba" flag for MBA
 	flagsSet, err := parseCpuInfoFile("/proc/cpuinfo")
 	if err != nil {
 		return
@@ -666,11 +665,11 @@ func (m *IntelRdtManager) GetStats() (*Stats, error) {
 	}
 
 	if IsMbmEnabled() {
-		mbmStats, err := getMbmStats(containerPath)
+		mbmStats, err := getMBMStats(containerPath)
 		if err != nil {
 			return stats, err
 		}
-		stats.MbmStats = mbmStats
+		stats.MBMStats = mbmStats
 	}
 
 	return stats, nil

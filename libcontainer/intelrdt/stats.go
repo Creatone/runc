@@ -15,15 +15,15 @@ type MemBwInfo struct {
 	NumClosids    uint64 `json:"num_closids,omitempty"`
 }
 
-type MbmNumaNodeStats struct {
+type MBMNumaNodeStats struct {
 	// The 'mbm_total_bytes' in 'container_id' group
-	MbmTotalBytes uint64 `json:"mbm_total_bytes,omitempty"`
+	MBMTotalBytes uint64 `json:"mbm_total_bytes,omitempty"`
 
 	// The 'mbm_local_bytes' in 'container_id' group
-	MbmLocalBytes uint64 `json:"mbm_local_bytes,omitempty"`
+	MBMLocalBytes uint64 `json:"mbm_local_bytes,omitempty"`
 
-	// The 'llc occupancy' in 'container_id' group
-	LlcOccupancy uint64 `json:"llc_occupancy,omitempty"`
+	// The 'llc_occupancy' in 'container_id' group
+	LLCOccupancy uint64 `json:"llc_occupancy,omitempty"`
 }
 
 type Stats struct {
@@ -46,7 +46,7 @@ type Stats struct {
 	MemBwSchema string `json:"mem_bw_schema,omitempty"`
 
 	// The memory bandwidth monitoring statistics from NUMA nodes in 'container_id' group
-	MbmStats *[]MbmNumaNodeStats `json:"mbm_statistics,omitempty"`
+	MBMStats *[]MBMNumaNodeStats `json:"mbm_statistics,omitempty"`
 }
 
 func NewStats() *Stats {

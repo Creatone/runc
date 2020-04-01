@@ -1,8 +1,6 @@
 package types
 
-import (
-	"github.com/opencontainers/runc/libcontainer/intelrdt"
-)
+import "github.com/opencontainers/runc/libcontainer/intelrdt"
 
 // Event struct for encoding the event data to json.
 type Event struct {
@@ -119,7 +117,7 @@ type IntelRdt struct {
 	MemBwSchema string `json:"mem_bw_schema,omitempty"`
 
 	// The memory bandwidth monitoring statistics from NUMA nodes in 'container_id' group
-	MbmStats *[]intelrdt.MbmNumaNodeStats `json:"mbm_statistics,omitempty"`
+	MBMStats *[]intelrdt.MBMNumaNodeStats `json:"mbm_statistics,omitempty"`
 }
 
 type NetworkInterface struct {
