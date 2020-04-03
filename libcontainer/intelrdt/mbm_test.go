@@ -3,6 +3,7 @@
 package intelrdt
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -88,6 +89,13 @@ func mockMBM(NUMANodes []string, mocks map[string]uint64) (string, error) {
 	return testDir, nil
 }
 
+func cleanup(directory string, t *testing.T) {
+	err := os.RemoveAll(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGetMbmStats(t *testing.T) {
 	mocksNUMANodesToCreate := []string{"mon_l3_00", "mon_l3_01"}
 
@@ -98,6 +106,7 @@ func TestGetMbmStats(t *testing.T) {
 	}
 
 	mockedMBM, err := mockMBM(mocksNUMANodesToCreate, mocksFilesToCreate)
+	defer cleanup(mockedMBM, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,26 +121,41 @@ func TestGetMbmStats(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		for _, numaStats := range *stats {
+		if len(*stats) != len(mocksNUMANodesToCreate) {
+			t.Fatal("")
+		}
 
-			if numaStats.MBMTotalBytes != mocksFilesToCreate["mbm_total_bytes"] {
-				t.Fatal("Wrong value of mbm_total_bytes")
+		checkStatCorrection := func(got MBMNumaNodeStats, expected MBMNumaNodeStats, t *testing.T) {
+			if got.MBMTotalBytes != expected.MBMTotalBytes {
+				t.Fatal(
+					fmt.Sprintf("Wrong value of mbm_total_bytes. Expected: %v but got: %v",
+						expected.MBMTotalBytes,
+						got.MBMTotalBytes))
 			}
 
-			if numaStats.MBMLocalBytes != mocksFilesToCreate["mbm_local_bytes"] {
-				t.Fatal("Wrong value of mbm_local_bytes")
+			if got.MBMLocalBytes != expected.MBMLocalBytes {
+				t.Fatal(
+					fmt.Sprintf("Wrong value of mbm_local_bytes. Expected: %v but got: %v",
+						expected.MBMLocalBytes,
+						got.MBMLocalBytes))
 			}
 
-			if numaStats.LLCOccupancy != mocksFilesToCreate["llc_occupancy"] {
-				t.Fatal("Wrong value of llc_occupancy")
+			if got.LLCOccupancy != expected.LLCOccupancy {
+				t.Fatal(
+					fmt.Sprintf("Wrong value of llc_occupancy. Expected: %v but got: %v",
+						expected.LLCOccupancy,
+						got.LLCOccupancy))
 			}
 		}
 
-	})
+		expectedStats := MBMNumaNodeStats{
+			MBMTotalBytes: mocksFilesToCreate["mbm_total_bytes"],
+			MBMLocalBytes: mocksFilesToCreate["mbm_local_bytes"],
+			LLCOccupancy:  mocksFilesToCreate["llc_occupancy"],
+		}
 
-	err = os.RemoveAll(mockedMBM)
-	if err != nil {
-		t.Fatal(err)
-	}
+		checkStatCorrection((*stats)[0], expectedStats, t)
+		checkStatCorrection((*stats)[1], expectedStats, t)
+	})
 
 }
