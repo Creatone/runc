@@ -122,7 +122,10 @@ func TestGetMbmStats(t *testing.T) {
 		}
 
 		if len(*stats) != len(mocksNUMANodesToCreate) {
-			t.Fatal("")
+			t.Fatal(
+				fmt.Sprintf(
+					"Wrong number of stats slices from NUMA nodes. Expected: %v but got: %v",
+					len(mocksNUMANodesToCreate), len(*stats)))
 		}
 
 		checkStatCorrection := func(got MBMNumaNodeStats, expected MBMNumaNodeStats, t *testing.T) {
