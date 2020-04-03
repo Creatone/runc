@@ -241,7 +241,6 @@ func init() {
 // Return the mount point path of Intel RDT "resource control" filesysem
 func findIntelRdtMountpointDir() (string, error) {
 	f, err := os.Open("/proc/self/mountinfo")
-
 	if err != nil {
 		return "", err
 	}

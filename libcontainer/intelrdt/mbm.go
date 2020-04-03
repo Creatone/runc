@@ -5,10 +5,11 @@ package intelrdt
 import (
 	"bufio"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 )
 
 var (
