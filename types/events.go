@@ -118,6 +118,9 @@ type IntelRdt struct {
 
 	// The memory bandwidth monitoring statistics from NUMA nodes in 'container_id' group
 	MBMStats *[]intelrdt.MBMNumaNodeStats `json:"mbm_statistics,omitempty"`
+
+	// The cache monitoring technology statistics from NUMA nodes in 'container_id' group
+	CMTStats *[]intelrdt.CMTNumaNodeStats `json:"cmt_statistics,omitempty"`
 }
 
 type NetworkInterface struct {
