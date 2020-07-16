@@ -3,6 +3,7 @@
 package intelrdt
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -118,5 +119,43 @@ func TestIntelRdtSetMemBwScSchema(t *testing.T) {
 
 	if value != memBwScSchemeAfter {
 		t.Fatal("Got the wrong value, set 'schemata' failed.")
+	}
+}
+
+func TestIntelRdtManager_GetStats_NotSupported_Type(t *testing.T) {
+	manager := IntelRdtManager{
+		Type: "not_supported",
+		Id:   "id",
+	}
+
+	_, err := manager.GetStats()
+
+	expectedError := errors.New("couldn't obtain stats from: \"id\" resctrl manager of type: \"not_supported\"")
+
+	if err == nil {
+		t.Fatalf("Expected error: %v, got nil.", expectedError)
+	}
+
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Expected error: %v but got: %v.", expectedError, err)
+	}
+}
+
+func Test_IntelRdtManager_Set_NotSupported_Type(t *testing.T) {
+	manager := IntelRdtManager{
+		Type: "not_supported",
+		Id:   "id",
+	}
+
+	err := manager.Set(nil)
+
+	expectedError := errors.New("couldn't set configuration for: \"id\" resctrl manager of type: \"not_supported\"")
+
+	if err == nil {
+		t.Fatalf("Expected error: %v, got nil.", expectedError)
+	}
+
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Expected error: %v but got: %v.", expectedError, err)
 	}
 }

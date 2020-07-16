@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
@@ -167,10 +169,16 @@ type IntelRdtManager struct {
 	Config *configs.Config
 	Id     string
 	Path   string
+	Type   string
 }
 
 const (
-	IntelRdtTasks = "tasks"
+	IntelRdtTasks         = "tasks"
+	MonGroupDirectoryName = "mon_groups"
+	// Monitoring group.
+	MON = "MON"
+	// Control group.
+	CTRL_MON = "CTRL_MON"
 )
 
 var (
@@ -548,26 +556,47 @@ func GetIntelRdtPath(id string) (string, error) {
 	return path, nil
 }
 
+// Get the 'container_id" path in Intel RDT "monitoring group" filesystem.
+func getMonGroupIntelRdtPath(id string) (string, error) {
+	rootPath, err := getIntelRdtRoot()
+	if err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(rootPath, MonGroupDirectoryName, id)
+	return path, nil
+}
+
 // Applies Intel RDT configuration to the process with the specified pid
 func (m *IntelRdtManager) Apply(pid int) (err error) {
-	// If intelRdt is not specified in config, we do nothing
-	if m.Config.IntelRdt == nil {
+	switch m.Type {
+	case CTRL_MON:
+		// If intelRdt is not specified in config, we do nothing
+		if m.Config.IntelRdt == nil {
+			return nil
+		}
+		rdtData, err := getIntelRdtData(m.Config, pid)
+		if err != nil && !IsNotFound(err) {
+			return err
+		}
+
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		path, err := rdtData.join(m.Id)
+		if err != nil {
+			return err
+		}
+
+		m.Path = path
 		return nil
-	}
-	d, err := getIntelRdtData(m.Config, pid)
-	if err != nil && !IsNotFound(err) {
-		return err
+
+	case MON:
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return WriteIntelRdtTasks(m.Path, pid)
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	path, err := d.join(m.Id)
-	if err != nil {
-		return err
-	}
-
-	m.Path = path
-	return nil
+	return fmt.Errorf("couldn't recognize resctrl type: %v", m.Type)
 }
 
 // Destroys the Intel RDT 'container_id' group
@@ -584,94 +613,124 @@ func (m *IntelRdtManager) Destroy() error {
 // Returns Intel RDT path to save in a state file and to be able to
 // restore the object later
 func (m *IntelRdtManager) GetPath() string {
+	var err error
 	if m.Path == "" {
-		m.Path, _ = GetIntelRdtPath(m.Id)
+		switch m.Type {
+		case CTRL_MON:
+			m.Path, err = GetIntelRdtPath(m.Id)
+			if err != nil {
+				logrus.Errorf("couldn't obtain Resctrl control group path for manager with id %v: %v", m.Id, err)
+			}
+		case MON:
+			flattedContainerID := strings.Replace(m.Id, "/", "-", -1)
+			m.Path, err = getMonGroupIntelRdtPath(flattedContainerID)
+			if err != nil {
+				logrus.Errorf("couldn't obtain Resctrl monitoring group path for manager with id %v: %v", m.Id, err)
+			}
+		}
 	}
 	return m.Path
 }
 
 // Returns statistics for Intel RDT
 func (m *IntelRdtManager) GetStats() (*Stats, error) {
-	// If intelRdt is not specified in config
-	if m.Config.IntelRdt == nil {
-		return nil, nil
-	}
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	stats := NewStats()
 
-	rootPath, err := getIntelRdtRoot()
-	if err != nil {
-		return nil, err
-	}
-	// The read-only L3 cache and memory bandwidth schemata in root
-	tmpRootStrings, err := getIntelRdtParamString(rootPath, "schemata")
-	if err != nil {
-		return nil, err
-	}
-	schemaRootStrings := strings.Split(tmpRootStrings, "\n")
+	switch m.Type {
+	case CTRL_MON:
+		containerPath := m.GetPath()
 
-	// The L3 cache and memory bandwidth schemata in 'container_id' group
-	containerPath := m.GetPath()
-	tmpStrings, err := getIntelRdtParamString(containerPath, "schemata")
-	if err != nil {
-		return nil, err
-	}
-	schemaStrings := strings.Split(tmpStrings, "\n")
-
-	if IsCatEnabled() {
-		// The read-only L3 cache information
-		l3CacheInfo, err := getL3CacheInfo()
+		err := getMonitoringStats(containerPath, stats)
 		if err != nil {
 			return nil, err
 		}
-		stats.L3CacheInfo = l3CacheInfo
 
-		// The read-only L3 cache schema in root
-		for _, schemaRoot := range schemaRootStrings {
-			if strings.Contains(schemaRoot, "L3") {
-				stats.L3CacheSchemaRoot = strings.TrimSpace(schemaRoot)
+		// If intelRdt is not specified in config
+		if m.Config != nil {
+			if m.Config.IntelRdt == nil {
+				return nil, nil
+			}
+
+			rootPath, err := getIntelRdtRoot()
+			if err != nil {
+				return nil, err
+			}
+			// The read-only L3 cache and memory bandwidth schemata in root
+			tmpRootStrings, err := getIntelRdtParamString(rootPath, "schemata")
+			if err != nil {
+				return nil, err
+			}
+			schemaRootStrings := strings.Split(tmpRootStrings, "\n")
+
+			// The L3 cache and memory bandwidth schemata in 'container_id' group
+
+			tmpStrings, err := getIntelRdtParamString(containerPath, "schemata")
+			if err != nil {
+				return nil, err
+			}
+			schemaStrings := strings.Split(tmpStrings, "\n")
+
+			if IsCatEnabled() {
+				// The read-only L3 cache information
+				l3CacheInfo, err := getL3CacheInfo()
+				if err != nil {
+					return nil, err
+				}
+				stats.L3CacheInfo = l3CacheInfo
+
+				// The read-only L3 cache schema in root
+				for _, schemaRoot := range schemaRootStrings {
+					if strings.Contains(schemaRoot, "L3") {
+						stats.L3CacheSchemaRoot = strings.TrimSpace(schemaRoot)
+					}
+				}
+
+				// The L3 cache schema in 'container_id' group
+				for _, schema := range schemaStrings {
+					if strings.Contains(schema, "L3") {
+						stats.L3CacheSchema = strings.TrimSpace(schema)
+					}
+				}
+			}
+
+			if IsMbaEnabled() {
+				// The read-only memory bandwidth information
+				memBwInfo, err := getMemBwInfo()
+				if err != nil {
+					return nil, err
+				}
+				stats.MemBwInfo = memBwInfo
+
+				// The read-only memory bandwidth information
+				for _, schemaRoot := range schemaRootStrings {
+					if strings.Contains(schemaRoot, "MB") {
+						stats.MemBwSchemaRoot = strings.TrimSpace(schemaRoot)
+					}
+				}
+
+				// The memory bandwidth schema in 'container_id' group
+				for _, schema := range schemaStrings {
+					if strings.Contains(schema, "MB") {
+						stats.MemBwSchema = strings.TrimSpace(schema)
+					}
+				}
 			}
 		}
 
-		// The L3 cache schema in 'container_id' group
-		for _, schema := range schemaStrings {
-			if strings.Contains(schema, "L3") {
-				stats.L3CacheSchema = strings.TrimSpace(schema)
-			}
-		}
-	}
+		return stats, nil
 
-	if IsMbaEnabled() {
-		// The read-only memory bandwidth information
-		memBwInfo, err := getMemBwInfo()
+	case MON:
+		path := m.GetPath()
+
+		err := getMonitoringStats(path, stats)
 		if err != nil {
 			return nil, err
 		}
-		stats.MemBwInfo = memBwInfo
-
-		// The read-only memory bandwidth information
-		for _, schemaRoot := range schemaRootStrings {
-			if strings.Contains(schemaRoot, "MB") {
-				stats.MemBwSchemaRoot = strings.TrimSpace(schemaRoot)
-			}
-		}
-
-		// The memory bandwidth schema in 'container_id' group
-		for _, schema := range schemaStrings {
-			if strings.Contains(schema, "MB") {
-				stats.MemBwSchema = strings.TrimSpace(schema)
-			}
-		}
+		return stats, nil
 	}
-
-	err = getMonitoringStats(containerPath, stats)
-	if err != nil {
-		return nil, err
-	}
-
-	return stats, nil
+	return nil, fmt.Errorf("couldn't obtain stats from: %q resctrl manager of type: %q", m.Id, m.Type)
 }
 
 // Set Intel RDT "resource control" filesystem as configured.
@@ -721,34 +780,46 @@ func (m *IntelRdtManager) Set(container *configs.Config) error {
 	// For example, on a two-socket machine, the schema line could be
 	// "MB:0=5000;1=7000" which means 5000 MBps memory bandwidth limit on
 	// socket 0 and 7000 MBps memory bandwidth limit on socket 1.
-	if container.IntelRdt != nil {
-		path := m.GetPath()
-		l3CacheSchema := container.IntelRdt.L3CacheSchema
-		memBwSchema := container.IntelRdt.MemBwSchema
+	switch m.Type {
+	case CTRL_MON:
+		if container.IntelRdt != nil {
+			path := m.GetPath()
+			l3CacheSchema := container.IntelRdt.L3CacheSchema
+			memBwSchema := container.IntelRdt.MemBwSchema
 
-		// Write a single joint schema string to schemata file
-		if l3CacheSchema != "" && memBwSchema != "" {
-			if err := writeFile(path, "schemata", l3CacheSchema+"\n"+memBwSchema); err != nil {
-				return NewLastCmdError(err)
+			// Write a single joint schema string to schemata file
+			if l3CacheSchema != "" && memBwSchema != "" {
+				if err := writeFile(path, "schemata", l3CacheSchema+"\n"+memBwSchema); err != nil {
+					return NewLastCmdError(err)
+				}
+			}
+
+			// Write only L3 cache schema string to schemata file
+			if l3CacheSchema != "" && memBwSchema == "" {
+				if err := writeFile(path, "schemata", l3CacheSchema); err != nil {
+					return NewLastCmdError(err)
+				}
+			}
+
+			// Write only memory bandwidth schema string to schemata file
+			if l3CacheSchema == "" && memBwSchema != "" {
+				if err := writeFile(path, "schemata", memBwSchema); err != nil {
+					return NewLastCmdError(err)
+				}
 			}
 		}
 
-		// Write only L3 cache schema string to schemata file
-		if l3CacheSchema != "" && memBwSchema == "" {
-			if err := writeFile(path, "schemata", l3CacheSchema); err != nil {
-				return NewLastCmdError(err)
-			}
+	case MON:
+		if _, err := os.Stat(m.GetPath()); err == nil {
+			return nil
 		}
-
-		// Write only memory bandwidth schema string to schemata file
-		if l3CacheSchema == "" && memBwSchema != "" {
-			if err := writeFile(path, "schemata", memBwSchema); err != nil {
-				return NewLastCmdError(err)
-			}
+		if err := os.Mkdir(m.GetPath(), 0755); err != nil {
+			return err
 		}
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("couldn't set configuration for: %q resctrl manager of type: %q", m.Id, m.Type)
 }
 
 func (raw *intelRdtData) join(id string) (string, error) {
