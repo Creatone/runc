@@ -18,9 +18,11 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/seccomp/libseccomp-golang v0.9.1
 	github.com/sirupsen/logrus v1.6.0
+	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 	// NOTE: urfave/cli must be <= v1.22.1 due to a regression: https://github.com/urfave/cli/issues/1092
 	github.com/urfave/cli v1.22.1
 	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )

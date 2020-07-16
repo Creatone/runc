@@ -5,6 +5,8 @@ package intelrdt
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIntelRdtSetL3CacheSchema(t *testing.T) {
@@ -119,4 +121,27 @@ func TestIntelRdtSetMemBwScSchema(t *testing.T) {
 	if value != memBwScSchemeAfter {
 		t.Fatal("Got the wrong value, set 'schemata' failed.")
 	}
+}
+
+func TestIntelRdtManager_GetStats_NotSupported_Type(t *testing.T) {
+	manager := IntelRdtManager{
+		Type: "not_supported",
+		Id:   "id",
+	}
+
+	_, err := manager.GetStats()
+
+	assert.EqualError(t, err, "couldn't obtain stats from: \"id\" resctrl manager of type: \"not_supported\"")
+}
+
+func Test_IntelRdtManager_Set_NotSupported_Type(t *testing.T) {
+	manager := IntelRdtManager{
+		Type: "not_supported",
+		Id:   "id",
+	}
+
+	err := manager.Set(nil)
+
+	assert.EqualError(t, err, "couldn't set configuration for: \"id\" resctrl manager of type: \"not_supported\"")
+
 }

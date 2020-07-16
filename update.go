@@ -321,6 +321,7 @@ other options are ignored.
 					Config: &config,
 					Id:     container.ID(),
 					Path:   state.IntelRdtPath,
+					Type:   intelrdt.CTRL_MON,
 				}
 				if err := intelRdtManager.Apply(state.InitProcessPid); err != nil {
 					return err
