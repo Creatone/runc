@@ -3,9 +3,13 @@
 package intelrdt
 
 import (
+	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 func TestIntelRdtSetL3CacheSchema(t *testing.T) {
@@ -248,5 +252,153 @@ func TestFindIntelRdtMountpointDir(t *testing.T) {
 					tc.mountpoint, mp)
 			}
 		})
+	}
+}
+
+func TestIntelRdtManagerGetStatsNotSupportedType(t *testing.T) {
+	helper := NewIntelRdtTestUtil(t)
+	defer helper.cleanup()
+
+	intelrdt := intelRdtManager{
+		mu:              sync.Mutex{},
+		config:          helper.IntelRdtData.config,
+		id:              "",
+		path:            helper.IntelRdtPath,
+		groupType:       "wrong_type",
+		switchGroupType: mockSwitchGroupType,
+	}
+
+	_, err := intelrdt.GetStats()
+
+	expectedError := errors.New(`couldn't obtain IntelRdt stats: "wrong_type" is not supported group type`)
+
+	if err == nil {
+		t.Fatalf("Expected error: %v, got nil.", expectedError)
+	}
+
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Expected error: %v but got: %v.", expectedError, err)
+	}
+}
+
+func TestIntelRdtManagerSetNotSupportedType(t *testing.T) {
+	helper := NewIntelRdtTestUtil(t)
+	defer helper.cleanup()
+
+	intelrdt := intelRdtManager{
+		mu:              sync.Mutex{},
+		config:          helper.IntelRdtData.config,
+		id:              "",
+		path:            helper.IntelRdtPath,
+		groupType:       "wrong_type",
+		switchGroupType: mockSwitchGroupType,
+	}
+
+	err := intelrdt.Set(&configs.Config{IntelRdt: &configs.IntelRdt{
+		L3CacheSchema: "",
+		MemBwSchema:   "",
+	}})
+
+	expectedError := errors.New(`couldn't set IntelRdt configuration: "wrong_type" is not supported group type`)
+
+	if err == nil {
+		t.Fatalf("Expected error: %v, got nil.", expectedError)
+	}
+
+	if err.Error() != expectedError.Error() {
+		t.Fatalf("Expected error: %v but got: %v.", expectedError, err)
+	}
+}
+
+func TestIntelRdtSetChangeGroupType(t *testing.T) {
+	var testCases = []struct {
+		config   *configs.Config
+		got      string
+		want     string
+		schemata string
+	}{
+		{
+			&configs.Config{
+				IntelRdt: &configs.IntelRdt{
+					L3CacheSchema: "",
+					MemBwSchema:   "",
+					Monitoring:    true,
+				}},
+			controlGroupType,
+			monitoringGroupType,
+			"",
+		},
+		{
+			&configs.Config{
+				IntelRdt: &configs.IntelRdt{
+					L3CacheSchema: "L3:0=f;1=f0",
+					MemBwSchema:   "",
+					Monitoring:    true,
+				}},
+			monitoringGroupType,
+			controlGroupType,
+			"L3:0=f;1=f0",
+		},
+		{
+			&configs.Config{
+				IntelRdt: &configs.IntelRdt{
+					L3CacheSchema: "",
+					MemBwSchema:   "MB:0=20;1=70",
+					Monitoring:    true,
+				}},
+			monitoringGroupType,
+			controlGroupType,
+			"MB:0=20;1=70",
+		},
+		{
+			&configs.Config{
+				IntelRdt: &configs.IntelRdt{
+					L3CacheSchema: "L3:0=f;1=f0",
+					MemBwSchema:   "MB:0=20;1=70",
+					Monitoring:    true,
+				}},
+			monitoringGroupType,
+			controlGroupType,
+			"L3:0=f;1=f0\nMB:0=20;1=70",
+		},
+	}
+
+	for _, test := range testCases {
+		helper := NewIntelRdtTestUtil(t)
+
+		intelrdt := &intelRdtManager{
+			mu:              sync.Mutex{},
+			config:          helper.IntelRdtData.config,
+			id:              "",
+			path:            helper.IntelRdtPath,
+			groupType:       test.got,
+			switchGroupType: mockSwitchGroupType,
+		}
+
+		helper.writeFileContents(map[string]string{
+			"tasks": "1\n2\n",
+		})
+
+		err := intelrdt.Set(test.config)
+		if err != nil {
+			t.Fatalf("failed to change group type: %v", err)
+		}
+
+		if intelrdt.groupType != test.want {
+			t.Fatalf("failed to change group type\ngot: %v\nwant: %v", intelrdt.groupType, test.want)
+		}
+
+		if test.schemata != "" {
+			schemata, err := getIntelRdtParamString(helper.IntelRdtPath, "schemata")
+			if err != nil {
+				t.Fatalf("Failed to parse file 'schemata' - %s", err)
+			}
+
+			if schemata != test.schemata {
+				t.Fatal("Got the wrong value of 'schemata' file.")
+			}
+		}
+
+		helper.cleanup()
 	}
 }

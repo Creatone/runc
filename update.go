@@ -22,6 +22,12 @@ func i64Ptr(i int64) *int64   { return &i }
 func u64Ptr(i uint64) *uint64 { return &i }
 func u16Ptr(i uint16) *uint16 { return &i }
 
+const (
+	l3CacheSchemaFlagName            = "l3-cache-schema"
+	memBwSchemaFlagName              = "mem-bw-schema"
+	enableIntelRdtMonitoringFlagName = "enable-intelrdt-monitoring"
+)
+
 var updateCommand = cli.Command{
 	Name:      "update",
 	Usage:     "update container resource constraints",
@@ -118,12 +124,16 @@ other options are ignored.
 			Usage: "Maximum number of pids allowed in the container",
 		},
 		cli.StringFlag{
-			Name:  "l3-cache-schema",
+			Name:  l3CacheSchemaFlagName,
 			Usage: "The string of Intel RDT/CAT L3 cache schema",
 		},
 		cli.StringFlag{
-			Name:  "mem-bw-schema",
+			Name:  memBwSchemaFlagName,
 			Usage: "The string of Intel RDT/MBA memory bandwidth schema",
+		},
+		cli.BoolFlag{
+			Name:  enableIntelRdtMonitoringFlagName,
+			Usage: "The flag that indicates Monitoring Features of Intel RDT",
 		},
 	},
 	Action: func(context *cli.Context) error {
@@ -296,34 +306,62 @@ other options are ignored.
 		config.Cgroups.Resources.PidsLimit = r.Pids.Limit
 
 		// Update Intel RDT
-		l3CacheSchema := context.String("l3-cache-schema")
-		memBwSchema := context.String("mem-bw-schema")
-		if l3CacheSchema != "" && !intelrdt.IsCatEnabled() {
+		isL3CacheSchemaFlagSet := context.IsSet(l3CacheSchemaFlagName)
+		l3CacheSchema := context.String(l3CacheSchemaFlagName)
+
+		isMemBwSchemaFlagSet := context.IsSet(memBwSchemaFlagName)
+		memBwSchema := context.String(memBwSchemaFlagName)
+
+		isMonitoringFlagSet := context.IsSet(enableIntelRdtMonitoringFlagName)
+		monitoring := context.Bool(enableIntelRdtMonitoringFlagName)
+
+		if isL3CacheSchemaFlagSet && l3CacheSchema != "" && !intelrdt.IsCatEnabled() {
 			return errors.New("Intel RDT/CAT: l3 cache schema is not enabled")
 		}
 
-		if memBwSchema != "" && !intelrdt.IsMbaEnabled() {
+		if isMemBwSchemaFlagSet && memBwSchema != "" && !intelrdt.IsMbaEnabled() {
 			return errors.New("Intel RDT/MBA: memory bandwidth schema is not enabled")
 		}
 
-		if l3CacheSchema != "" || memBwSchema != "" {
-			// If intelRdt is not specified in original configuration, we just don't
-			// Apply() to create intelRdt group or attach tasks for this container.
-			// In update command, we could re-enable through IntelRdtManager.Apply()
-			// and then update intelrdt constraint.
-			if config.IntelRdt == nil {
-				state, err := container.State()
+		if isMonitoringFlagSet && monitoring && !intelrdt.IsMBMEnabled() && !intelrdt.IsCMTEnabled() {
+			return errors.New("Intel RDT monitoring features are not enabled")
+		}
+
+		// If intelRdt is not specified in original configuration, we just don't
+		// Apply() to create intelRdt group or attach tasks for this container.
+		// In update command, we could re-enable through IntelRdtManager.Apply()
+		// and then update intelrdt constraint.
+		if config.IntelRdt == nil {
+			state, err := container.State()
+			if err != nil {
+				return err
+			}
+			config.IntelRdt = &configs.IntelRdt{}
+			config.IntelRdt.L3CacheSchema = l3CacheSchema
+			config.IntelRdt.MemBwSchema = memBwSchema
+			config.IntelRdt.Monitoring = monitoring
+			intelRdtManager := intelrdt.NewManager(&config, container.ID(), state.IntelRdtPath)
+			if intelRdtManager != nil {
+				pids, err := intelrdt.GetAllProcessPids(state.InitProcessPid)
 				if err != nil {
 					return err
 				}
-				config.IntelRdt = &configs.IntelRdt{}
-				intelRdtManager := intelrdt.NewManager(&config, container.ID(), state.IntelRdtPath)
-				if err := intelRdtManager.Apply(state.InitProcessPid); err != nil {
-					return err
+				for _, pid := range pids {
+					if err := intelRdtManager.Apply(pid); err != nil {
+						return err
+					}
 				}
 			}
-			config.IntelRdt.L3CacheSchema = l3CacheSchema
-			config.IntelRdt.MemBwSchema = memBwSchema
+		} else {
+			if isL3CacheSchemaFlagSet {
+				config.IntelRdt.L3CacheSchema = l3CacheSchema
+			}
+			if isMemBwSchemaFlagSet {
+				config.IntelRdt.MemBwSchema = memBwSchema
+			}
+			if isMonitoringFlagSet {
+				config.IntelRdt.Monitoring = monitoring
+			}
 		}
 
 		return container.Set(config)

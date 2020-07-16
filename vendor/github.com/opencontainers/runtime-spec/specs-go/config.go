@@ -692,4 +692,7 @@ type LinuxIntelRdt struct {
 	// The unit of memory bandwidth is specified in "percentages" by
 	// default, and in "MBps" if MBA Software Controller is enabled.
 	MemBwSchema string `json:"memBwSchema,omitempty"`
+
+	// Monitoring flag that's indicated to monitor llc-occupancy or total and local memory bandwidth.
+	Monitoring bool `json:"monitoring,omitempty"`
 }

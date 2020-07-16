@@ -65,3 +65,9 @@ func (c *intelRdtTestUtil) writeFileContents(fileContents map[string]string) {
 		}
 	}
 }
+
+func mockSwitchGroupType(m *intelRdtManager, _ func(string, string) (string, error)) error {
+	return switchGroup(m, func(id string, groupType string) (string, error) {
+		return filepath.Join(m.path), nil
+	})
+}

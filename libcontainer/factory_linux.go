@@ -272,7 +272,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
 	}
-	if intelrdt.IsCatEnabled() || intelrdt.IsMbaEnabled() {
+	if l.NewIntelRdtManager != nil {
 		c.intelRdtManager = l.NewIntelRdtManager(config, id, "")
 	}
 	c.state = &stoppedState{c: c}
@@ -314,13 +314,16 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		root:                 containerRoot,
 		created:              state.Created,
 	}
+
+	if l.NewIntelRdtManager != nil {
+		c.intelRdtManager = l.NewIntelRdtManager(&state.Config, id, state.IntelRdtPath)
+	}
+
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {
 		return nil, err
 	}
-	if intelrdt.IsCatEnabled() || intelrdt.IsMbaEnabled() {
-		c.intelRdtManager = l.NewIntelRdtManager(&state.Config, id, state.IntelRdtPath)
-	}
+
 	return c, nil
 }
 

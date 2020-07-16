@@ -301,6 +301,9 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 			if spec.Linux.IntelRdt.MemBwSchema != "" {
 				config.IntelRdt.MemBwSchema = spec.Linux.IntelRdt.MemBwSchema
 			}
+			if spec.Linux.IntelRdt.Monitoring {
+				config.IntelRdt.Monitoring = spec.Linux.IntelRdt.Monitoring
+			}
 		}
 	}
 	if spec.Process != nil {
