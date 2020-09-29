@@ -5,6 +5,7 @@ package intelrdt
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/moby/sys/mountinfo"
+
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
@@ -241,8 +243,8 @@ func init() {
 }
 
 // Return the mount point path of Intel RDT "resource control" filesysem
-func findIntelRdtMountpointDir() (string, error) {
-	mi, err := mountinfo.GetMounts(func(m *mountinfo.Info) (bool, bool) {
+func findIntelRdtMountpointDir(reader io.Reader) (string, error) {
+	mi, err := mountinfo.GetMountsFromReader(reader, func(m *mountinfo.Info) (bool, bool) {
 		// similar to mountinfo.FstypeFilter but stops after the first match
 		if m.Fstype == "resctrl" {
 			return false, true // don't skip, stop
@@ -250,7 +252,7 @@ func findIntelRdtMountpointDir() (string, error) {
 		return true, false // skip, keep going
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%v : %v", NewNotFoundError("Intel RDT"), err)
 	}
 	if len(mi) < 1 {
 		return "", NewNotFoundError("Intel RDT")
@@ -273,7 +275,12 @@ func getIntelRdtRoot() (string, error) {
 		return intelRdtRoot, nil
 	}
 
-	root, err := findIntelRdtMountpointDir()
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return "", err
+	}
+
+	root, err := findIntelRdtMountpointDir(f)
 	if err != nil {
 		return "", err
 	}

@@ -3,6 +3,8 @@
 package intelrdt
 
 import (
+	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -119,4 +121,75 @@ func TestIntelRdtSetMemBwScSchema(t *testing.T) {
 	if value != memBwScSchemeAfter {
 		t.Fatal("Got the wrong value, set 'schemata' failed.")
 	}
+}
+
+func TestFindIntelRdtMountpointDir(t *testing.T) {
+	//isMbaScEnabled = false
+	testError := "Expected: %q but got: %q"
+
+	t.Run("Valid mountinfo with MBA Software Controller disabled", func(t *testing.T) {
+		f, err := os.Open("testing/mountinfo")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		mountpoint, err := findIntelRdtMountpointDir(f)
+		if err != nil {
+			t.Fatalf("Failed to find intel rdt mountpoint directory: %s", err)
+		}
+
+		if mountpoint != "/sys/fs/resctrl" {
+			t.Fatal("Got the wrong value of Intel RDT mountpoint directory")
+		}
+
+		if isMbaScEnabled == true {
+			t.Fatal("Intel RDT MBA Software Controller should be disabled")
+		}
+	})
+
+	t.Run("Valid mountinfo with MBA Software Controller enabled", func(t *testing.T) {
+		f, err := os.Open("testing/mountinfo_mba_sc")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		mountpoint, err := findIntelRdtMountpointDir(f)
+		if err != nil {
+			t.Fatalf("Failed to find intel rdt mountpoint directory: %s", err)
+		}
+
+		if mountpoint != "/sys/fs/resctrl" {
+			t.Fatal("Got the wrong value of Intel RDT mountpoint directory")
+		}
+
+		if isMbaScEnabled == false {
+			t.Fatal("Intel RDT MBA Software Controller should be enabled")
+		}
+	})
+
+	t.Run("Empty mountinfo", func(t *testing.T) {
+		expectedNotFoundError := errors.New("mountpoint for Intel RDT not found")
+
+		_, err := findIntelRdtMountpointDir(strings.NewReader(""))
+		if err != nil {
+			if err.Error() != expectedNotFoundError.Error() {
+				t.Fatalf(testError, expectedNotFoundError, err)
+			}
+		} else {
+			t.Fatalf(testError, expectedNotFoundError, err)
+		}
+	})
+
+	t.Run("Invalid mountinfo", func(t *testing.T) {
+		expectedNotFoundError := errors.New("mountpoint for Intel RDT not found : Parsing '.' failed: not enough fields (1)")
+
+		_, err := findIntelRdtMountpointDir(strings.NewReader("."))
+		if err != nil {
+			if err.Error() != expectedNotFoundError.Error() {
+				t.Fatalf(testError, expectedNotFoundError, err)
+			}
+		} else {
+			t.Fatalf(testError, expectedNotFoundError, err)
+		}
+	})
 }
